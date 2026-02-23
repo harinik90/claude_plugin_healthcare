@@ -1,0 +1,13 @@
+# Claude Agent SDK dependencies
+# ─────────────────────────────
+# Core SDK — remote MCP client support requires >= 0.50
+anthropic>=0.50.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
+
+# MCP server availability probing
+requests>=2.31.0
+
+# MCP Python SDK (for local/stdio MCP connections if needed)
+mcp>=1.6.0
