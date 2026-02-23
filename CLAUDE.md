@@ -2,17 +2,19 @@
 
 ## Overview
 
-`healthcare_agent` is a multi-agent system built on the **Claude Agent SDK pattern**.
-It mirrors the functionality of the sibling project `../claude_healthcare/pa_chatbot.py`
-but restructures it into a proper agent hierarchy:
+`healthcare_agent` is a single-agent healthcare PA assistant built on the
+Claude Agent SDK. It mirrors the functionality of the sibling project
+`../claude_healthcare/pa_chatbot.py` as a proper Python package.
 
 ```
-OrchestratorAgent
-    ├── NPIAgent    (NPI Registry MCP)
-    ├── ICD10Agent  (ICD-10 Codes MCP)
-    ├── CMSAgent    (CMS Coverage MCP)
-    └── PAAgent     (all three MCPs — full PA workflow)
+HealthcareAgent.run(query)
+    └── Claude chains MCP tools as needed:
+          npi_lookup_provider      (NPI Registry MCP)
+          icd10_validate           (ICD-10 Codes MCP)
+          cms_lcd_details          (CMS Coverage MCP)
 ```
+
+One agent. One `run()` call. Claude decides which tool(s) to invoke.
 
 ---
 
@@ -28,21 +30,21 @@ All MCP endpoints are discovered at runtime from Claude Code's plugin registry:
     <subpackage>/.claude-plugin/plugin.json       ← per-package MCP server definitions
 ```
 
-The function `load_and_verify_servers()` in [registry.py](registry.py) is the single,
+`load_and_verify_servers()` in [registry.py](registry.py) is the single
 authoritative place for MCP server discovery. It must:
 
 1. Read `installed_plugins.json` to find every plugin's `installPath`.
 2. Recursively walk each `installPath` for `.claude-plugin/plugin.json` files.
 3. Extract the `mcpServers` block from each file.
 4. HEAD-probe each discovered server for availability.
-5. Raise `RuntimeError` if any server is unreachable — do not proceed with partial coverage.
+5. Raise `RuntimeError` if any server is unreachable.
 
 ### Enforcement
 
 - Do not add MCP server URLs to any `.py`, `.env`, or config file.
-- If `load_and_verify_servers()` finds no servers, exit with a clear error.
+- If no servers are found, exit with a clear error.
 - If a probe fails, exit — no fallback, no partial operation.
-- There is no REST API fallback. All healthcare data must come through plugin-registered MCP servers.
+- There is no REST API fallback. All data must come through plugin-registered MCP servers.
 
 ---
 
@@ -59,44 +61,34 @@ authoritative place for MCP server discovery. It must:
 
 **Required conda environment: `payerai-gpt`**
 
-All development, testing, and execution must use the `payerai-gpt` conda environment.
-
 ```bash
-# First-time setup
 conda create -n payerai-gpt python=3.11   # if it doesn't exist
 conda activate payerai-gpt
 pip install -r requirements.txt
 ```
 
-Do not activate the environment from inside Python scripts — that is the caller's responsibility.
+Do not activate the environment from inside Python scripts.
 
 ---
 
-## Agent SDK Architecture Rules
+## Architecture Rules
 
-### 1. One Agent Per Domain
-Each specialist agent (`NPIAgent`, `ICD10Agent`, `CMSAgent`, `PAAgent`) is responsible
-for exactly one data domain. Do not merge domain logic across agents.
+### 1. Single Agent
+All query types (NPI lookup, ICD-10 validation, CMS coverage, full PA) are
+handled by the one `HealthcareAgent` class in [agent.py](agent.py).
+Do not split into specialist agents or add an orchestrator.
 
-### 2. BaseAgent Is the Only Agentic Loop
-The MCP tool-call loop lives exclusively in [agents/base.py](agents/base.py).
-Specialist agents must not re-implement the loop — they only set `system_prompt`.
+### 2. System Prompt Is the Only Configuration
+Behaviour is controlled entirely by the `SYSTEM_PROMPT` in [agent.py](agent.py).
+To change how the agent handles a query type, edit the system prompt.
 
-### 3. Orchestrator Routes via Python Tool Definitions
-The `OrchestratorAgent` in [agents/orchestrator.py](agents/orchestrator.py) routes
-queries to specialists using Claude's `tool_use` mechanism with Python tool definitions
-(`ROUTING_TOOLS`). This is the canonical Agent SDK pattern — **agents calling other
-agents through typed tool definitions**.
+### 3. No State in the Agent Class
+`HealthcareAgent` is stateless between `run()` calls. Conversation history
+is passed in by the caller, not stored on the instance.
 
-Do not add business logic to the orchestrator. It classifies and delegates only.
-
-### 4. Specialist Agents Are Reusable As Libraries
-Every specialist agent exposes `run(query, history=None) -> str`. They can be called
-directly (without the orchestrator) from other Python code.
-
-### 5. No State in Agent Classes
-Agent instances are stateless between `run()` calls. Conversation history is passed
-in by the caller and not stored on the agent object.
+### 4. MCP Loop Lives in `agent.py`
+The `while True` agentic loop that drives MCP tool calls is in `run()` inside
+[agent.py](agent.py). Do not duplicate it elsewhere.
 
 ---
 
@@ -104,25 +96,11 @@ in by the caller and not stored on the agent object.
 
 | File | Responsibility | Change with care |
 |------|----------------|-----------------|
-| `registry.py` | MCP discovery — source of truth for server URLs | Yes — affects all agents |
-| `agents/base.py` | Core agentic loop | Yes — affects all agents |
-| `agents/orchestrator.py` | Routing tool definitions + loop | Yes — routing changes break dispatch |
-| `agents/npi_agent.py` | NPI system prompt | Low risk — prompt only |
-| `agents/icd10_agent.py` | ICD-10 system prompt | Low risk — prompt only |
-| `agents/cms_agent.py` | CMS system prompt | Low risk — prompt only |
-| `agents/pa_agent.py` | PA workflow system prompt | Medium — chains all MCPs |
-| `config.py` | Model, token, API key config | Low risk |
+| `registry.py` | MCP discovery — source of truth for server URLs | Yes — affects startup |
+| `agent.py` | Agent class + system prompt + MCP loop | Yes — core behaviour |
+| `config.py` | Model, token limit, probe timeout | Low risk |
 | `main.py` | CLI entry point | Low risk |
-
----
-
-## Adding a New Specialist Agent
-
-1. Create `agents/<domain>_agent.py` — subclass `BaseAgent`, set `system_prompt`.
-2. Add the class to `agents/__init__.py`.
-3. Add a routing tool entry to `ROUTING_TOOLS` in `agents/orchestrator.py`.
-4. Instantiate the new agent in `OrchestratorAgent.__init__` and add it to `_specialists`.
-5. Document the MCP tools it uses in its docstring.
+| `run_agent.py` | Top-level script runner | Low risk |
 
 ---
 
@@ -130,18 +108,18 @@ in by the caller and not stored on the agent object.
 
 ```bash
 conda activate payerai-gpt
-python -m healthcare_agent.main
+python run_agent.py
 ```
 
 Or as a library:
 
 ```python
-from healthcare_agent import OrchestratorAgent
-from healthcare_agent.registry import load_and_verify_servers
 import anthropic
+from healthcare_agent import HealthcareAgent
+from healthcare_agent.registry import load_and_verify_servers
 
 client      = anthropic.Anthropic(api_key="...")
 mcp_servers = load_and_verify_servers(verbose=False)
-agent       = OrchestratorAgent(client, mcp_servers)
-answer      = agent.run("Walk me through a PA for CPT 32408, ICD R91.1")
+agent       = HealthcareAgent(client, mcp_servers)
+answer      = agent.run("Walk me through a PA for CPT 32408, ICD R91.1, NPI 1003000126")
 ```
