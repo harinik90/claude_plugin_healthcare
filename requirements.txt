@@ -1,0 +1,9 @@
+# Core SDK — remote MCP client support requires >= 0.50
+anthropic>=0.50.0
+python-dotenv>=1.0.0
+
+# Used for MCP server availability probe at startup
+requests>=2.31.0
+
+# MCP Python SDK — enables local/stdio MCP server connections if needed
+mcp>=1.6.0
