@@ -27,21 +27,11 @@ for _stream in (sys.stdout, sys.stderr):
 # ── API ───────────────────────────────────────────────────────────────────────
 API_KEY             = os.environ.get("ANTHROPIC_API_KEY",         "")
 
-# ── Models ────────────────────────────────────────────────────────────────────
-# Orchestrator: routes queries and synthesises specialist answers
-ORCHESTRATOR_MODEL  = os.environ.get("CLAUDE_ORCHESTRATOR_MODEL", "claude-sonnet-4-6")
+# ── Model ─────────────────────────────────────────────────────────────────────
+ORCHESTRATOR_MODEL = os.environ.get("CLAUDE_MODEL",      "claude-sonnet-4-6")
 
-# Specialists: NPI, ICD-10, CMS domain agents
-SPECIALIST_MODEL    = os.environ.get("CLAUDE_SPECIALIST_MODEL",   "claude-sonnet-4-6")
-
-# PA agent: full prior-auth workflow — multi-step clinical reasoning
-PA_MODEL            = os.environ.get("CLAUDE_PA_MODEL",           "claude-sonnet-4-6")
-
-# ── Token limits ──────────────────────────────────────────────────────────────
-MAX_TOKENS          = int(os.environ.get("CLAUDE_MAX_TOKENS",     "4096"))
-
-# ── Parallel execution ────────────────────────────────────────────────────────
-MAX_PARALLEL_AGENTS = int(os.environ.get("MAX_PARALLEL_AGENTS",  "4"))
+# ── Token limit ───────────────────────────────────────────────────────────────
+MAX_TOKENS         = int(os.environ.get("CLAUDE_MAX_TOKENS", "4096"))
 
 # ── MCP probe ─────────────────────────────────────────────────────────────────
-MCP_PROBE_TIMEOUT   = int(os.environ.get("MCP_PROBE_TIMEOUT",    "5"))
+MCP_PROBE_TIMEOUT  = int(os.environ.get("MCP_PROBE_TIMEOUT", "5"))

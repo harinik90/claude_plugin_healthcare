@@ -1,21 +1,19 @@
 """
 Healthcare Agent
 -----------------
-A single agent with access to all three MCP servers (NPI Registry,
-ICD-10 Codes, CMS Coverage). Claude decides which tool(s) to call.
+A single agent with access to all three MCP servers.
+Claude decides which tool(s) to call and chains them as needed.
 
-Parallel requests:
-  run_parallel(queries) fires multiple independent queries concurrently
-  using ThreadPoolExecutor — each query gets its own isolated API call.
+For a full PA scenario, one run() call handles everything:
+  NPI lookup → ICD-10 validation → CMS coverage → PA summary
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import anthropic
 
-from .config import ORCHESTRATOR_MODEL, MAX_TOKENS, MAX_PARALLEL_AGENTS
+from .config import ORCHESTRATOR_MODEL, MAX_TOKENS
 
 SYSTEM_PROMPT = """\
 You are a Healthcare Prior Authorization (PA) assistant serving clinicians,
@@ -52,26 +50,20 @@ class HealthcareAgent:
     """
     Single healthcare PA agent backed by three MCP servers.
 
-    Single request:
-        answer = agent.run("Look up NPI 1003000126")
+    Claude chains whichever MCP tools are needed for the query —
+    a simple NPI lookup uses one tool; a full PA scenario chains all three.
 
-    Multiple parallel requests:
-        results = agent.run_parallel([
-            "Look up NPI 1003000126",
-            "Validate ICD-10 code J18.9",
-            "What does Medicare cover for CPT 32408?",
-        ])
+    Usage:
+        answer = agent.run("Walk me through a PA for CPT 32408, ICD R91.1, NPI 1003000126")
     """
 
     def __init__(self, client: anthropic.Anthropic, mcp_servers: list[dict]) -> None:
         self.client      = client
         self.mcp_servers = mcp_servers
 
-    # ── Single request ──────────────────────────────────────────────────────
-
     def run(self, query: str, history: list[dict] | None = None) -> str:
         """
-        Run one query through the agentic MCP loop and return the final answer.
+        Run a query through the agentic MCP loop and return the final answer.
 
         Args:
             query:   The user's question or PA scenario.
@@ -107,30 +99,3 @@ class HealthcareAgent:
                     print(f"  [mcp:{server}/{tc.name}]", flush=True)
             else:
                 return " ".join(text_parts) if text_parts else "(no response)"
-
-    # ── Parallel requests ───────────────────────────────────────────────────
-
-    def run_parallel(self, queries: list[str]) -> list[str]:
-        """
-        Run multiple independent queries concurrently.
-
-        Each query gets its own isolated agentic loop — results are returned
-        in the same order as the input queries.
-
-        Args:
-            queries: List of independent questions or PA scenarios.
-
-        Returns:
-            List of answers in the same order as queries.
-        """
-        results = [None] * len(queries)
-
-        with ThreadPoolExecutor(max_workers=min(len(queries), MAX_PARALLEL_AGENTS)) as pool:
-            future_to_index = {
-                pool.submit(self.run, query): i
-                for i, query in enumerate(queries)
-            }
-            for future in as_completed(future_to_index):
-                results[future_to_index[future]] = future.result()
-
-        return results
