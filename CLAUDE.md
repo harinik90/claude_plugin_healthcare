@@ -1,4 +1,4 @@
-# CLAUDE.md — Project Rules for claude_priorauthskill
+# CLAUDE.md — Project Rules for claude_healthcare
 
 ## MCP Server URL Policy
 
@@ -52,13 +52,43 @@ This project depends on the following plugins being installed in Claude Code:
 
 ---
 
-## Running the Chatbot
+## Python Environment
+
+**Required conda environment: `payerai-gpt`**
+
+All development, testing, and execution of this project must use the
+`payerai-gpt` conda environment. Do not run the chatbot in the base
+environment or any other virtual environment.
+
+### First-time setup
+
+```bash
+# Activate the required environment
+conda activate payerai-gpt
+
+# Install dependencies into payerai-gpt
+pip install -r requirements.txt
+```
+
+### Running the Chatbot
 
 ```bash
 conda activate payerai-gpt
-cd claude_priorauthskill
+cd claude_healthcare
 python pa_chatbot.py
 ```
 
 The chatbot will print which MCP servers it discovered from the plugin registry
 and confirm their availability before starting the chat loop.
+
+### Environment Enforcement
+
+- Always verify the active environment before running: `conda info --envs`
+- If `payerai-gpt` does not exist, create it first:
+  ```bash
+  conda create -n payerai-gpt python=3.11
+  conda activate payerai-gpt
+  pip install -r requirements.txt
+  ```
+- Do not add a `conda activate` call inside `pa_chatbot.py` — environment
+  activation is the caller's responsibility, not the script's.
